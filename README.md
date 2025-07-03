@@ -236,6 +236,10 @@ Se verifica el correcto funcionamiento de los 4 jobs del flujo de CI/CD:
 </div>
 
 
+## Video
+
+https://drive.google.com/file/d/11LgvbwWjN9rsebuPTE17dYjzKfQ8SAiA/view?usp=sharing
+
 ---
 
 # Práctica Calificada 04
