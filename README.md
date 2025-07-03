@@ -1,4 +1,5 @@
 # Proyecto 8: Generador de manifiestos de Kubernetes parametrizado
+
 - **Nombres**: Kevin Douglas
 - **Apellidos**: Condor Chavez
 - **Email:**: kcondorc@uni.pe
@@ -6,6 +7,238 @@
 **URL del repositorio grupal**: https://github.com/Ox-Chema-xO/Generador-de-manifiestos-de-Kubernetes-parametrizado
 
 ---
+
+# Práctica Calificada 05
+
+## Tarea Elegida
+
+* **CI/CD** de manifest templates (lint, test, deploy)
+
+## Implementación
+
+Se crearon las carpetas `.github/workflows/` y el archivo `ci.yml` dentro para implementar el flujo de CI/CD en GitHub Actions. Este flujo se encarga de:
+- **Linting**: Validación de sintaxis YAML y estilo de código Python.
+- **Unit Tests**: Ejecución de pruebas unitarias para verificar la generación de manifiestos y su validez.
+- **Deployment**: Despliegue de los manifiestos generados en un clúster de Minikube.
+- **E2E Tests**: Pruebas end-to-end para validar el flujo completo desde la generación hasta el despliegue y funcionamiento de la aplicación en Kubernetes.
+
+```python
+# .github/workflows/ci.yml
+name: CI/CD Manifest Templates
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'templates/**'
+      - 'src/**'
+      - 'tests/**'
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    name: Lint Templates y Código
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        
+    - name: Lint YAML templates
+      run: |
+        yamllint templates/ helm-chart/app-chart/values.yaml
+        
+    - name: Lint Python code
+      run: |
+        flake8 src/ tests/
+
+  unit-test:
+    runs-on: ubuntu-latest
+    name: Test con Minikube
+    needs: lint
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Start minikube
+      uses: medyagh/setup-minikube@master
+      with:
+        minikube-version: 'latest'
+        kubernetes-version: 'v1.33.2'
+        
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        
+    - name: Run unit tests
+      run: |
+        python -m pytest tests/test_validacion.py tests/test_validar_values.py -v
+        
+    - name: Test template generation
+      run: |
+        python src/manifest_generator.py \
+          -t templates/deployment.yaml.template templates/service.yaml.template \
+          -v templates/values.yaml \
+          -o test-ci-output
+        
+    - name: Validate generated manifests
+      run: |
+        kubectl apply --dry-run=client -f test-ci-output/
+
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to Minikube
+    needs: unit-test
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Start minikube
+      uses: medyagh/setup-minikube@master
+      with:
+        minikube-version: 'latest'
+        kubernetes-version: 'v1.33.2'
+        
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+        
+    - name: Generate and deploy manifests
+      run: |
+        python src/manifest_generator.py \
+          -t templates/deployment.yaml.template templates/service.yaml.template \
+          -v templates/values.yaml \
+          -o deploy-output \
+          --deploy
+
+  e2e-test:
+    runs-on: ubuntu-latest
+    name: E2E Tests
+    needs: deploy
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        
+    - name: Start minikube
+      uses: medyagh/setup-minikube@master
+      with:
+        minikube-version: 'latest'
+        kubernetes-version: 'v1.33.2'
+    
+    - name: Install dependencies
+      run: pip install -r requirements.txt
+
+    - name: Run E2E test
+      run: |
+        pytest tests/test_e2e_local.py
+```
+
+## Commits
+
+Se realizaron 4 commits para implementar las funcionalidades de CI/CD (1 commit por cada job del flujo), 2 commits para arreglos de errores, y un último commit de merge de la rama `feature/condor-chavez-kevin/ci-cd-templates` a `develop`.
+
+```bash
+(.venv) hoperrs@hoperrs:~/Escritorio/Generador-de-manifiestos-de-Kubernetes-parametrizado$ git log -7 --graph
+*   commit 75a8cd35ba31a1d06943d1db3ac0aad85de21d1b  (HEAD -> develop, origin/develop)
+|\  Merge: 4ca856e b5fd5e4
+| | Author: Guido Chipana <168389835+GuidoCh23@users.noreply.github.com>
+| | Date:   Wed Jul 2 22:03:27 2025 -0500
+| | 
+| |     Merge pull request #25 from Ox-Chema-xO/feature/condor-chavez-kevin/ci-cd-templates
+| |     
+| |     Feature/condor-chavez-kevin/ci-cd-templates
+| | 
+| * commit b5fd5e471503a9f4dcbfedfa829993e9538fa9f5 (origin/feature/condor-chavez-kevin/ci-cd-templates, feature/condor-chavez-kevin/ci-
+cd-templates)
+| | Author: hoperrs <kchavezc19@gmail.com>
+| | Date:   Wed Jul 2 21:53:47 2025 -0500
+| | 
+| |     fix: corregir comando pytest en job e2e-test
+| |     
+| |     Se agrega extensión .py faltante en comando pytest para ejecutar correctamente los tests E2E. Se mantiene consistencia con otros
+ jobs del pipeline.
+| | 
+| * commit 6caad1fcd4a75f4f800c399171ec2ac6b88f5f72
+| | Author: hoperrs <kchavezc19@gmail.com>
+| | Date:   Wed Jul 2 21:08:32 2025 -0500
+| | 
+| |     feat: implementar validación E2E en pipeline CI/CD
+| |     
+| |     Se agrega job independiente para ejecutar tests end-to-end en minikube limpio. Se incluye configuración completa de ambiente Pyt
+hon Y Kubernetes para testing de integración.
+| | 
+| * commit cc8fad5cfae2cf232caec1145da25ef5624d14fd
+| | Author: hoperrs <kchavezc19@gmail.com>
+| | Date:   Wed Jul 2 10:31:16 2025 -0500
+| | 
+| |     feat: implementar deployment automático de manifiestos
+| |     
+| |     Se agrega job deploy que ejecuta manifest_generator.py con flag --deploy. Se configura para ejecutar en minikube después de vali
+dar lint y tests.
+| | 
+| * commit 948850929651e819a83787c0c4395a4759b43a7c
+| | Author: hoperrs <kchavezc19@gmail.com>
+| | Date:   Wed Jul 2 09:29:54 2025 -0500
+| | 
+| |     fix: agregar develop a triggers de pull request
+| |     
+| |     Se incluye branch develop en triggers de PR para consistencia. Permite testing automático en PRs hacia develop además de main.
+| | 
+| * commit 1d85e5c4b0ebe3d767b0e5ad609caea637e22b64
+| | Author: hoperrs <kchavezc19@gmail.com>
+| | Date:   Wed Jul 2 09:22:13 2025 -0500
+| | 
+| |     feat: implementar testing automatizado con minikube
+| |     
+| |     Se agrega job de testing que inicia minikube local. Se configuran tests unitarios y de validación de templates.
+| | 
+| * commit ac8485b76c3f2aba9245f44c06cad41ed7d54451
+|/  Author: hoperrs <kchavezc19@gmail.com>
+|   Date:   Wed Jul 2 09:03:30 2025 -0500
+|   
+|       feat: agregar workflow básico de GitHub Actions
+|       
+|       Se configura pipeline inicial con lint de YAML y Python.
+```
+
+## Validación
+
+Se verifica el correcto funcionamiento de los 4 jobs del flujo de CI/CD:
+
+<div a<lign="center">
+  <img src="https://i.postimg.cc/fbkYJpJJ/Captura-desde-2025-07-03-08-44-10.png" alt="image1" width="600" />
+</div>
+
+
+---
+
+# Práctica Calificada 04
 
 ## Sprint 1
 Me encargué de:
